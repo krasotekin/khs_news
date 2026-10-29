@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인재원장 동향 뉴스레터 관리</title>
+<style>
+  :root {
+    --navy: #1f3864;
+    --ink: #1b2733;
+    --muted: #6b7785;
+    --line: #e3e7ec;
+    --tint: #f4f6f8;
+    --danger: #b3261e;
+    --ok: #15803d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 64px;
+    background: var(--tint);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: var(--navy); }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  section {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 16px; margin-bottom: 16px;
+  }
+  h2 { font-size: 15px; margin: 0 0 12px; color: var(--navy); }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type="text"], input[type="email"], input[type="password"], select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 6px; font: inherit; background: #fff; color: var(--ink);
+  }
+  button {
+    padding: 9px 14px; border-radius: 6px; border: 1px solid var(--navy);
+    background: var(--navy); color: #fff; font: inherit; cursor: pointer;
+  }
+  button.ghost { background: #fff; color: var(--navy); }
+  button.link {
+    background: none; border: none; color: var(--danger);
+    padding: 4px 6px; font-size: 13px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 160px; }
+  .row > button { flex: 0 0 auto; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { color: var(--muted); font-size: 12px; font-weight: 600; }
+  td.actions { width: 96px; text-align: right; white-space: nowrap; }
+  .empty { color: var(--muted); font-size: 13px; padding: 14px 0; }
+  .current {
+    background: var(--tint); border-left: 3px solid var(--navy);
+    padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 14px; font-weight: 600;
+  }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-size: 14px; display: none; max-width: 92vw;
+  }
+  .toast.error { background: var(--danger); }
+  .hidden { display: none; }
+  fieldset { border: none; padding: 0; margin: 0 0 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    border: none; background: #fff; color: var(--muted); border-radius: 0; padding: 8px 18px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>인재원장 동향 뉴스레터 관리</h1>
+  <p class="sub">수신자 · 발송 일정 · 즉시 실행</p>
+
+  <!-- 토큰 -->
+  <section id="auth">
+    <h2>관리자 토큰</h2>
+    <div class="row">
+      <input type="password" id="token" placeholder="GitHub Fine-grained PAT" autocomplete="off">
+      <button id="saveToken">저장</button>
+      <button id="clearToken" class="ghost">삭제</button>
+    </div>
+    <p class="hint">
+      토큰은 이 브라우저에만 저장됩니다. 권한: 비공개 저장소 1개 · Contents / Actions / Workflows 읽기·쓰기
+    </p>
+  </section>
+
+  <!-- 수신자 -->
+  <section id="recipientsCard" class="hidden">
+    <h2>수신자 이메일</h2>
+    <div class="row">
+      <input type="text" id="newName" placeholder="이름 (선택)">
+      <input type="email" id="newEmail" placeholder="name@example.com">
+      <button id="addRecipient">추가</button>
+    </div>
+    <table>
+      <thead><tr><th>이름</th><th>이메일</th><th class="actions"></th></tr></thead>
+      <tbody id="recipientRows"></tbody>
+    </table>
+    <div id="recipientEmpty" class="empty">등록된 수신자가 없습니다.</div>
+    <div class="row" style="margin-top:14px;">
+      <button id="saveRecipients">수신자 저장</button>
+    </div>
+  </section>
+
+  <!-- 일정 -->
+  <section id="scheduleCard" class="hidden">
+    <h2>발송 일정</h2>
+    <div class="current" id="currentSchedule">현재 설정을 불러오는 중…</div>
+    <fieldset>
+      <label>주기</label>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="daily" aria-pressed="true">매일</button>
+        <button type="button" data-mode="weekly" aria-pressed="false">매주</button>
+      </div>
+    </fieldset>
+    <div class="row">
+      <div id="weekdayWrap" class="hidden">
+        <label for="weekday">요일</label>
+        <select id="weekday"></select>
+      </div>
+      <div>
+        <label for="time">시각 (한국시간)</label>
+        <select id="time"></select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <button id="saveSchedule">일정 저장</button>
+    </div>
+    <p class="hint">
+      GitHub 예약 실행은 5~30분 지연될 수 있습니다. 저장하면 워크플로의 cron 값(UTC)도 함께 수정됩니다.
+    </p>
+  </section>
+
+  <!-- 즉시 실행 -->
+  <section id="runCard" class="hidden">
+    <h2>즉시 실행</h2>
+    <div class="row">
+      <button id="runNow">지금 수집·발송 실행</button>
+    </div>
+    <p class="hint">실행일 전날 기사를 수집해 등록된 수신자에게 발송합니다.</p>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== 대상 저장소 ===== */
+const OWNER = "krasotekin";
+const REPO = "newsletter-engine";
+const WORKFLOW_FILE = "newsletter.yml";
+const WORKFLOW_PATH = ".github/workflows/" + WORKFLOW_FILE;
+const RECIPIENTS_PATH = "config/recipients.json";
+const SCHEDULE_PATH = "config/schedule.json";
+const API = "https://api.github.com";
+const TOKEN_KEY = "khs_admin_token";
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+let token = localStorage.getItem(TOKEN_KEY) || "";
+let defaultBranch = "main";
+let recipients = [];
+let recipientsSha = null;
+let scheduleSha = null;
+let schedule = { mode: "daily", weekday: 1, time_kst: "09:00" };
+
+/* ===== 공통 ===== */
+function toast(message, isError) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.className = "toast" + (isError ? " error" : "");
+  el.style.display = "block";
+  setTimeout(() => { el.style.display = "none"; }, isError ? 6000 : 3000);
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": "Bearer " + token,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {})
+    }
+  });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || ("요청 실패 (HTTP " + res.status + ")"));
+  }
+  return data;
+}
+
+function encodeBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  bytes.forEach(b => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
+function decodeBase64(base64) {
+  const binary = atob(base64.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function getFile(path) {
+  const data = await api(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${defaultBranch}`);
+  return { text: decodeBase64(data.content), sha: data.sha };
+}
+
+async function putFile(path, text, sha, message) {
+  const data = await api(`/repos/${OWNER}/${REPO}/contents/${path}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      message,
+      content: encodeBase64(text),
+      sha,
+      branch: defaultBranch
+    })
+  });
+  return data.content.sha;
+}
+
+/* ===== KST → UTC cron ===== */
+function toCron(mode, weekday, timeKst) {
+  const [hourText, minuteText] = timeKst.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  let utcHour = hour - 9;
+  let dayShift = 0;
+  if (utcHour < 0) { utcHour += 24; dayShift = -1; }
+  if (mode === "daily") return `${minute} ${utcHour} * * *`;
+  const utcWeekday = (weekday + dayShift + 7) % 7;
+  return `${minute} ${utcHour} * * ${utcWeekday}`;
+}
+
+function scheduleLabel(mode, weekday, timeKst) {
+  const [hourText, minuteText] = timeKst.split(":");
+  const hour = Number(hourText);
+  const period = hour < 12 ? "오전" : "오후";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const clock = `${period} ${hour12}:${minuteText}`;
+  return mode === "daily" ? `매일 ${clock}` : `매주 ${WEEKDAYS[weekday]}요일 ${clock}`;
+}
+
+function applyCron(yamlText, cron, timeKst) {
+  const line = `    - cron: "${cron}" # KST ${timeKst}`;
+  if (!/^\s*-\s*cron:.*$/m.test(yamlText)) throw new Error("워크플로에서 cron 줄을 찾지 못했습니다.");
+  return yamlText.replace(/^\s*-\s*cron:.*$/m, line);
+}
+
+/* ===== 화면 ===== */
+function showData(visible) {
+  ["recipientsCard", "scheduleCard", "runCard"].forEach(id => {
+    document.getElementById(id).classList.toggle("hidden", !visible);
+  });
+}
+
+function renderRecipients() {
+  const tbody = document.getElementById("recipientRows");
+  tbody.innerHTML = "";
+  recipients.forEach((person, index) => {
+    const tr = document.createElement("tr");
+
+    const nameTd = document.createElement("td");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = person.name || "";
+    nameInput.addEventListener("input", e => { recipients[index].name = e.target.value; });
+    nameTd.appendChild(nameInput);
+
+    const emailTd = document.createElement("td");
+    const emailInput = document.createElement("input");
+    emailInput.type = "email";
+    emailInput.value = person.email || "";
+    emailInput.addEventListener("input", e => { recipients[index].email = e.target.value.trim(); });
+    emailTd.appendChild(emailInput);
+
+    const actionTd = document.createElement("td");
+    actionTd.className = "actions";
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "link";
+    removeBtn.textContent = "삭제";
+    removeBtn.addEventListener("click", () => {
+      recipients.splice(index, 1);
+      renderRecipients();
+    });
+    actionTd.appendChild(removeBtn);
+
+    tr.append(nameTd, emailTd, actionTd);
+    tbody.appendChild(tr);
+  });
+  document.getElementById("recipientEmpty").classList.toggle("hidden", recipients.length > 0);
+}
+
+function renderSchedule() {
+  document.getElementById("currentSchedule").textContent =
+    "현재 설정 · " + scheduleLabel(schedule.mode, schedule.weekday, schedule.time_kst);
+  document.querySelectorAll("#modeSeg button").forEach(btn => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.mode === schedule.mode));
+  });
+  document.getElementById("weekdayWrap").classList.toggle("hidden", schedule.mode !== "weekly");
+  document.getElementById("weekday").value = String(schedule.weekday);
+  document.getElementById("time").value = schedule.time_kst;
+}
+
+function buildSelects() {
+  const weekdaySelect = document.getElementById("weekday");
+  WEEKDAYS.forEach((name, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = name + "요일";
+    weekdaySelect.appendChild(option);
+  });
+  const timeSelect = document.getElementById("time");
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (const minute of ["00", "30"]) {
+      const value = String(hour).padStart(2, "0") + ":" + minute;
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value + "  (" + scheduleLabel("daily", 0, value).replace("매일 ", "") + ")";
+      timeSelect.appendChild(option);
+    }
+  }
+}
+
+/* ===== 로드 ===== */
+async function loadAll() {
+  if (!token) { showData(false); return; }
+  try {
+    const repo = await api(`/repos/${OWNER}/${REPO}`);
+    defaultBranch = repo.default_branch || "main";
+
+    const recipientsFile = await getFile(RECIPIENTS_PATH);
+    recipientsSha = recipientsFile.sha;
+    const parsed = JSON.parse(recipientsFile.text);
+    recipients = (parsed.recipients || []).map(r => ({ name: r.name || "", email: r.email || "" }));
+
+    const scheduleFile = await getFile(SCHEDULE_PATH);
+    scheduleSha = scheduleFile.sha;
+    const savedSchedule = JSON.parse(scheduleFile.text);
+    schedule = {
+      mode: savedSchedule.mode === "weekly" ? "weekly" : "daily",
+      weekday: Number.isInteger(savedSchedule.weekday) ? savedSchedule.weekday : 1,
+      time_kst: savedSchedule.time_kst || "09:00"
+    };
+
+    showData(true);
+    renderRecipients();
+    renderSchedule();
+  } catch (error) {
+    showData(false);
+    toast("불러오지 못했습니다: " + error.message, true);
+  }
+}
+
+/* ===== 이벤트 ===== */
+document.getElementById("saveToken").addEventListener("click", () => {
+  token = document.getElementById("token").value.trim();
+  if (!token) { toast("토큰을 입력해 주십시오.", true); return; }
+  localStorage.setItem(TOKEN_KEY, token);
+  toast("토큰을 저장했습니다.");
+  loadAll();
+});
+
+document.getElementById("clearToken").addEventListener("click", () => {
+  localStorage.removeItem(TOKEN_KEY);
+  token = "";
+  document.getElementById("token").value = "";
+  showData(false);
+  toast("토큰을 삭제했습니다.");
+});
+
+document.getElementById("addRecipient").addEventListener("click", () => {
+  const nameInput = document.getElementById("newName");
+  const emailInput = document.getElementById("newEmail");
+  const email = emailInput.value.trim();
+  if (!email.includes("@")) { toast("이메일 형식을 확인해 주십시오.", true); return; }
+  if (recipients.some(r => r.email.toLowerCase() === email.toLowerCase())) {
+    toast("이미 등록된 이메일입니다.", true);
+    return;
+  }
+  recipients.push({ name: nameInput.value.trim(), email });
+  nameInput.value = "";
+  emailInput.value = "";
+  renderRecipients();
+});
+
+document.getElementById("saveRecipients").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const invalid = recipients.find(r => !r.email.includes("@"));
+  if (invalid) { toast("이메일 형식을 확인해 주십시오.", true); return; }
+  button.disabled = true;
+  try {
+    const payload = {
+      updated: new Date().toISOString().slice(0, 10),
+      recipients: recipients.map(r => ({ name: r.name, email: r.email }))
+    };
+    recipientsSha = await putFile(
+      RECIPIENTS_PATH,
+      JSON.stringify(payload, null, 2) + "\n",
+      recipientsSha,
+      "chore: 수신자 갱신 (관리 화면)"
+    );
+    toast("수신자 " + recipients.length + "명을 저장했습니다.");
+  } catch (error) {
+    toast("저장 실패: " + error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.querySelectorAll("#modeSeg button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    schedule.mode = btn.dataset.mode;
+    renderSchedule();
+  });
+});
+
+document.getElementById("weekday").addEventListener("change", e => {
+  schedule.weekday = Number(e.target.value);
+});
+
+document.getElementById("time").addEventListener("change", e => {
+  schedule.time_kst = e.target.value;
+});
+
+document.getElementById("saveSchedule").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const cron = toCron(schedule.mode, schedule.weekday, schedule.time_kst);
+    const label = scheduleLabel(schedule.mode, schedule.weekday, schedule.time_kst);
+
+    const workflow = await getFile(WORKFLOW_PATH);
+    const updatedYaml = applyCron(workflow.text, cron, schedule.time_kst);
+    if (updatedYaml !== workflow.text) {
+      await putFile(WORKFLOW_PATH, updatedYaml, workflow.sha, "chore: 발송 일정 변경 (" + label + ")");
+    }
+
+    const payload = {
+      mode: schedule.mode,
+      weekday: schedule.weekday,
+      time_kst: schedule.time_kst,
+      cron_utc: cron,
+      label,
+      updated: new Date().toISOString().slice(0, 10)
+    };
+    scheduleSha = await putFile(
+      SCHEDULE_PATH,
+      JSON.stringify(payload, null, 2) + "\n",
+      scheduleSha,
+      "chore: 발송 일정 갱신 (관리 화면)"
+    );
+
+    renderSchedule();
+    toast(label + " 로 저장했습니다. (UTC cron: " + cron + ")");
+  } catch (error) {
+    toast("저장 실패: " + error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById("runNow").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+      method: "POST",
+      body: JSON.stringify({ ref: defaultBranch, inputs: {} })
+    });
+    toast("실행을 요청했습니다. Actions 탭에서 진행 상황을 확인할 수 있습니다.");
+  } catch (error) {
+    toast("실행 실패: " + error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/* ===== 시작 ===== */
+buildSelects();
+if (token) document.getElementById("token").value = token;
+loadAll();
+</script>
+</body>
+</html>
