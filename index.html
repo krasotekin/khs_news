@@ -97,6 +97,7 @@
   <section id="recipientsCard" class="hidden">
     <h2>수신자 이메일</h2>
     <p class="hint" style="margin:0 0 10px;">모든 일정에 공통으로 적용됩니다. 수신자끼리 서로의 주소는 보이지 않습니다.</p>
+    <div class="current" id="recipientStatus">저장된 수신자를 불러오는 중…</div>
     <div class="row">
       <input type="text" id="newName" placeholder="이름 (선택)">
       <input type="email" id="newEmail" placeholder="name@example.com">
@@ -109,6 +110,7 @@
     <div id="recipientEmpty" class="empty">등록된 수신자가 없습니다.</div>
     <div class="row" style="margin-top:14px;">
       <button id="saveRecipients">수신자 저장</button>
+      <button id="reloadRecipients" class="ghost">저장된 목록 다시 불러오기</button>
     </div>
   </section>
 
@@ -167,14 +169,30 @@ const RANGES = [
 
 /* 토큰은 탭 수명 동안만 보관한다.
    localStorage 는 같은 origin(krasotekin.github.io)의 다른 Pages 와 공유되므로 쓰지 않는다. */
-let token = sessionStorage.getItem(TOKEN_KEY) || "";
+let token = storageGet(TOKEN_KEY);
 let defaultBranch = "main";
 let recipients = [];
+let savedRecipients = [];   // 저장소에 실제로 올라가 있는 목록
+let recipientsUpdated = "";
 let schedules = [];
 let recipientsSha = null;
 let scheduleSha = null;
 
 /* ===== 공통 ===== */
+/* 저장소 접근이 막힌 브라우저(사생활 보호 모드 등)에서도 화면이 죽지 않게 감싼다. */
+function storageGet(key) {
+  try { return sessionStorage.getItem(key) || ""; } catch (e) { return ""; }
+}
+
+function storageSet(key, value) {
+  try { sessionStorage.setItem(key, value); return true; } catch (e) { return false; }
+}
+
+function storageRemove(key) {
+  try { sessionStorage.removeItem(key); } catch (e) { /* 무시 */ }
+  try { localStorage.removeItem(key); } catch (e) { /* 예전 버전이 남긴 토큰 */ }
+}
+
 function toast(message, isError) {
   const el = document.getElementById("toast");
   el.textContent = message;
@@ -276,6 +294,29 @@ function showData(visible) {
   });
 }
 
+function cloneRecipients(list) {
+  return list.map(r => ({ name: (r.name || "").trim(), email: (r.email || "").trim() }));
+}
+
+function recipientsDirty() {
+  return JSON.stringify(cloneRecipients(recipients)) !== JSON.stringify(cloneRecipients(savedRecipients));
+}
+
+function renderRecipientStatus() {
+  const el = document.getElementById("recipientStatus");
+  if (!el) return;
+  const saved = savedRecipients.map(r => r.email).filter(Boolean);
+  const when = recipientsUpdated ? ` · 마지막 저장 ${recipientsUpdated}` : "";
+  const head = saved.length
+    ? `저장된 수신자 ${saved.length}명${when}`
+    : `저장된 수신자 없음${when}`;
+  const list = saved.length ? `<div style="font-weight:normal;padding-top:4px;">${saved.join(", ")}</div>` : "";
+  const dirty = recipientsDirty()
+    ? '<div style="color:#b3261e;font-weight:normal;padding-top:4px;">화면에 저장하지 않은 변경이 있습니다 · 수신자 저장을 눌러 주십시오</div>'
+    : "";
+  el.innerHTML = head + list + dirty;
+}
+
 function renderRecipients() {
   const tbody = document.getElementById("recipientRows");
   tbody.innerHTML = "";
@@ -285,13 +326,13 @@ function renderRecipients() {
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = person.name || "";
-    nameInput.addEventListener("input", e => { recipients[index].name = e.target.value; });
+    nameInput.addEventListener("input", e => { recipients[index].name = e.target.value; renderRecipientStatus(); });
     cell(tr, nameInput);
 
     const emailInput = document.createElement("input");
     emailInput.type = "email";
     emailInput.value = person.email || "";
-    emailInput.addEventListener("input", e => { recipients[index].email = e.target.value.trim(); });
+    emailInput.addEventListener("input", e => { recipients[index].email = e.target.value.trim(); renderRecipientStatus(); });
     cell(tr, emailInput);
 
     const removeBtn = document.createElement("button");
@@ -306,6 +347,7 @@ function renderRecipients() {
     tbody.appendChild(tr);
   });
   document.getElementById("recipientEmpty").classList.toggle("hidden", recipients.length > 0);
+  renderRecipientStatus();
 }
 
 function renderSchedules() {
@@ -391,6 +433,8 @@ async function loadAll() {
     const parsedRecipients = JSON.parse(recipientsFile.text);
     recipients = (parsedRecipients.recipients || [])
       .map(r => ({ name: r.name || "", email: r.email || "" }));
+    savedRecipients = cloneRecipients(recipients);
+    recipientsUpdated = parsedRecipients.updated || "";
 
     const scheduleFile = await getFile(SCHEDULE_PATH);
     scheduleSha = scheduleFile.sha;
@@ -425,14 +469,15 @@ async function loadAll() {
 document.getElementById("saveToken").addEventListener("click", () => {
   token = document.getElementById("token").value.trim();
   if (!token) { toast("토큰을 입력해 주십시오.", true); return; }
-  sessionStorage.setItem(TOKEN_KEY, token);
-  toast("토큰을 저장했습니다. (탭을 닫으면 지워집니다)");
+  const kept = storageSet(TOKEN_KEY, token);
+  toast(kept
+    ? "토큰을 저장했습니다. (탭을 닫으면 지워집니다)"
+    : "토큰을 적용했습니다. (이 브라우저가 보관을 막아 새로고침하면 다시 입력해야 합니다)");
   loadAll();
 });
 
 document.getElementById("clearToken").addEventListener("click", () => {
-  sessionStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(TOKEN_KEY); /* 예전 버전이 남긴 토큰도 함께 지운다 */
+  storageRemove(TOKEN_KEY);
   token = "";
   document.getElementById("token").value = "";
   showData(false);
@@ -457,6 +502,25 @@ document.getElementById("addRecipient").addEventListener("click", () => {
   renderRecipients();
 });
 
+document.getElementById("reloadRecipients").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const file = await getFile(RECIPIENTS_PATH);
+    recipientsSha = file.sha;
+    const parsed = JSON.parse(file.text);
+    recipients = (parsed.recipients || []).map(r => ({ name: r.name || "", email: r.email || "" }));
+    savedRecipients = cloneRecipients(recipients);
+    recipientsUpdated = parsed.updated || "";
+    renderRecipients();
+    toast("저장된 수신자 " + recipients.length + "명을 불러왔습니다.");
+  } catch (error) {
+    toast("불러오기 실패: " + error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 document.getElementById("saveRecipients").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   const invalid = recipients.find(r => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email));
@@ -473,6 +537,9 @@ document.getElementById("saveRecipients").addEventListener("click", async (event
       recipientsSha,
       "chore: 수신자 갱신 (관리 화면)"
     );
+    savedRecipients = cloneRecipients(recipients);
+    recipientsUpdated = payload.updated;
+    renderRecipientStatus();
     toast("수신자 " + recipients.length + "명을 저장했습니다.");
   } catch (error) {
     toast("저장 실패: " + error.message, true);
