@@ -251,10 +251,11 @@ function decodeBase64(base64) {
 
 async function getFile(path) {
   /* 저장 직후 다시 읽으면 중간 캐시가 예전 내용을 돌려줄 수 있다.
-     그 sha 로 저장하면 거부되므로 매번 캐시를 우회한다. */
+     그 sha 로 저장하면 거부되므로 주소를 매번 다르게 해 캐시를 우회한다.
+     Cache-Control 헤더는 GitHub API 의 CORS 허용 목록에 없어 요청 자체가
+     막히므로(Failed to fetch) 쓰지 않는다. */
   const data = await api(
-    `/repos/${OWNER}/${REPO}/contents/${path}?ref=${defaultBranch}&_=${Date.now()}`,
-    { headers: { "Cache-Control": "no-cache" } }
+    `/repos/${OWNER}/${REPO}/contents/${path}?ref=${defaultBranch}&_=${Date.now()}`
   );
   return { text: decodeBase64(data.content), sha: data.sha };
 }
