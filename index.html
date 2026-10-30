@@ -62,6 +62,14 @@
   }
   .toast.error { background: var(--danger); }
   .hidden { display: none; }
+  .tokenbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    flex-wrap: wrap; background: #fff; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+    font-size: 13px; color: var(--muted);
+  }
+  .tokenbar-actions { display: flex; gap: 8px; }
+  .tokenbar button { padding: 6px 12px; font-size: 13px; }
   .off { opacity: .45; }
   .sched-table select, .sched-table input { padding: 6px 8px; font-size: 13px; }
   .sched-table th:nth-child(1), .sched-table td:nth-child(1) { width: 20%; }
@@ -92,6 +100,14 @@
       권한: 비공개 저장소 1개 · <strong>Contents · Actions</strong> 읽기·쓰기 (Workflows 권한은 필요하지 않습니다)
     </p>
   </section>
+
+  <div id="tokenBar" class="hidden tokenbar">
+    <span>관리자 토큰 적용됨 · 이 탭에서만 유지됩니다</span>
+    <span class="tokenbar-actions">
+      <button id="changeToken" class="ghost">토큰 변경</button>
+      <button id="dropToken" class="ghost">삭제</button>
+    </span>
+  </div>
 
   <!-- 수신자 -->
   <section id="recipientsCard" class="hidden">
@@ -234,7 +250,12 @@ function decodeBase64(base64) {
 }
 
 async function getFile(path) {
-  const data = await api(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${defaultBranch}`);
+  /* 저장 직후 다시 읽으면 중간 캐시가 예전 내용을 돌려줄 수 있다.
+     그 sha 로 저장하면 거부되므로 매번 캐시를 우회한다. */
+  const data = await api(
+    `/repos/${OWNER}/${REPO}/contents/${path}?ref=${defaultBranch}&_=${Date.now()}`,
+    { headers: { "Cache-Control": "no-cache" } }
+  );
   return { text: decodeBase64(data.content), sha: data.sha };
 }
 
@@ -292,6 +313,25 @@ function showData(visible) {
   ["recipientsCard", "scheduleCard", "runCard"].forEach(id => {
     document.getElementById(id).classList.toggle("hidden", !visible);
   });
+  /* 토큰이 통하면 입력 영역은 접고 한 줄 요약만 남긴다. */
+  document.getElementById("auth").classList.toggle("hidden", visible);
+  document.getElementById("tokenBar").classList.toggle("hidden", !visible);
+}
+
+/* 저장소 파일이 그 사이 바뀌면 sha 가 맞지 않아 저장이 거부된다.
+   최신 sha 를 받아 두고 상황을 알린다. 한 번 더 누르면 화면 내용으로 덮어쓴다. */
+async function recoverSha(error, path) {
+  const message = (error && error.message) || "";
+  if (!/does not match|but expected|conflict/i.test(message)) return false;
+  try {
+    const current = await getFile(path);
+    if (path === RECIPIENTS_PATH) recipientsSha = current.sha;
+    if (path === SCHEDULE_PATH) scheduleSha = current.sha;
+    toast("저장소 내용이 그 사이 바뀌었습니다. 다시 불러오기로 확인하시거나, 저장을 한 번 더 누르면 화면 내용으로 덮어씁니다.", true);
+  } catch (inner) {
+    toast("저장 실패: " + message, true);
+  }
+  return true;
 }
 
 function cloneRecipients(list) {
@@ -484,6 +524,16 @@ document.getElementById("clearToken").addEventListener("click", () => {
   toast("토큰을 삭제했습니다.");
 });
 
+document.getElementById("changeToken").addEventListener("click", () => {
+  document.getElementById("auth").classList.remove("hidden");
+  document.getElementById("tokenBar").classList.add("hidden");
+  document.getElementById("token").focus();
+});
+
+document.getElementById("dropToken").addEventListener("click", () => {
+  document.getElementById("clearToken").click();
+});
+
 document.getElementById("addRecipient").addEventListener("click", () => {
   const nameInput = document.getElementById("newName");
   const emailInput = document.getElementById("newEmail");
@@ -542,7 +592,9 @@ document.getElementById("saveRecipients").addEventListener("click", async (event
     renderRecipientStatus();
     toast("수신자 " + recipients.length + "명을 저장했습니다.");
   } catch (error) {
-    toast("저장 실패: " + error.message, true);
+    if (!(await recoverSha(error, RECIPIENTS_PATH))) {
+      toast("저장 실패: " + error.message, true);
+    }
   } finally {
     button.disabled = false;
   }
@@ -589,7 +641,9 @@ document.getElementById("saveSchedules").addEventListener("click", async (event)
     toast("일정 " + schedules.length + "건을 저장했습니다.");
     renderRunOptions();
   } catch (error) {
-    toast("저장 실패: " + error.message, true);
+    if (!(await recoverSha(error, SCHEDULE_PATH))) {
+      toast("저장 실패: " + error.message, true);
+    }
   } finally {
     button.disabled = false;
   }
