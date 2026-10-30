@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>인재원장 동향 뉴스레터 관리</title>
+<title>인사 동향 뉴스레터 관리</title>
 <style>
   :root {
     --navy: #1f3864;
@@ -22,7 +22,7 @@
     color: var(--ink);
     font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
   }
-  .wrap { max-width: 720px; margin: 0 auto; }
+  .wrap { max-width: 860px; margin: 0 auto; }
   h1 { font-size: 20px; margin: 0 0 4px; color: var(--navy); }
   .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   section {
@@ -51,12 +51,9 @@
   table { width: 100%; border-collapse: collapse; margin-top: 12px; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
   th { color: var(--muted); font-size: 12px; font-weight: 600; }
-  td.actions { width: 96px; text-align: right; white-space: nowrap; }
+  td.actions { width: 60px; text-align: right; white-space: nowrap; }
+  td.on { width: 54px; text-align: center; }
   .empty { color: var(--muted); font-size: 13px; padding: 14px 0; }
-  .current {
-    background: var(--tint); border-left: 3px solid var(--navy);
-    padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 14px; font-weight: 600;
-  }
   .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
   .toast {
     position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
@@ -65,17 +62,21 @@
   }
   .toast.error { background: var(--danger); }
   .hidden { display: none; }
-  fieldset { border: none; padding: 0; margin: 0 0 12px; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .seg button {
-    border: none; background: #fff; color: var(--muted); border-radius: 0; padding: 8px 18px;
+  .off { opacity: .45; }
+  .sched-table select, .sched-table input { padding: 6px 8px; font-size: 13px; }
+  .sched-table th:nth-child(1), .sched-table td:nth-child(1) { width: 20%; }
+  @media (max-width: 720px) {
+    .sched-table, .sched-table tbody, .sched-table tr, .sched-table td { display: block; width: 100%; }
+    .sched-table thead { display: none; }
+    .sched-table tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+    .sched-table td { border: none; padding: 4px 0; }
+    .sched-table td.actions, .sched-table td.on { text-align: left; width: auto; }
   }
-  .seg button[aria-pressed="true"] { background: var(--navy); color: #fff; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>인재원장 동향 뉴스레터 관리</h1>
+  <h1>인사 동향 뉴스레터 관리</h1>
   <p class="sub">수신자 · 발송 일정 · 즉시 실행</p>
 
   <!-- 토큰 -->
@@ -87,13 +88,15 @@
       <button id="clearToken" class="ghost">삭제</button>
     </div>
     <p class="hint">
-      토큰은 이 브라우저에만 저장됩니다. 권한: 비공개 저장소 1개 · Contents / Actions / Workflows 읽기·쓰기
+      토큰은 이 탭에만 보관되며 탭을 닫으면 지워집니다.
+      권한: 비공개 저장소 1개 · <strong>Contents · Actions</strong> 읽기·쓰기 (Workflows 권한은 필요하지 않습니다)
     </p>
   </section>
 
   <!-- 수신자 -->
   <section id="recipientsCard" class="hidden">
     <h2>수신자 이메일</h2>
+    <p class="hint" style="margin:0 0 10px;">모든 일정에 공통으로 적용됩니다. 수신자끼리 서로의 주소는 보이지 않습니다.</p>
     <div class="row">
       <input type="text" id="newName" placeholder="이름 (선택)">
       <input type="email" id="newEmail" placeholder="name@example.com">
@@ -112,29 +115,20 @@
   <!-- 일정 -->
   <section id="scheduleCard" class="hidden">
     <h2>발송 일정</h2>
-    <div class="current" id="currentSchedule">현재 설정을 불러오는 중…</div>
-    <fieldset>
-      <label>주기</label>
-      <div class="seg" id="modeSeg">
-        <button type="button" data-mode="daily" aria-pressed="true">매일</button>
-        <button type="button" data-mode="weekly" aria-pressed="false">매주</button>
-      </div>
-    </fieldset>
-    <div class="row">
-      <div id="weekdayWrap" class="hidden">
-        <label for="weekday">요일</label>
-        <select id="weekday"></select>
-      </div>
-      <div>
-        <label for="time">시각 (한국시간)</label>
-        <select id="time"></select>
-      </div>
-    </div>
+    <table class="sched-table">
+      <thead><tr>
+        <th>이름</th><th>주기</th><th>요일</th><th>시각 (KST)</th><th>검색 범위</th><th class="on">사용</th><th class="actions"></th>
+      </tr></thead>
+      <tbody id="scheduleRows"></tbody>
+    </table>
+    <div id="scheduleEmpty" class="empty">등록된 일정이 없습니다.</div>
     <div class="row" style="margin-top:14px;">
-      <button id="saveSchedule">일정 저장</button>
+      <button id="addSchedule" class="ghost">일정 추가</button>
+      <button id="saveSchedules">일정 저장</button>
     </div>
     <p class="hint">
-      GitHub 예약 실행은 5~30분 지연될 수 있습니다. 저장하면 워크플로의 cron 값(UTC)도 함께 수정됩니다.
+      서버는 30분마다 깨어나 이 목록을 확인합니다. GitHub 예약 실행이 5~30분 지연되더라도
+      당일(매주 일정은 해당 주) 미발송이면 다음 확인에서 발송하고, 이미 보낸 일정은 생략합니다.
     </p>
   </section>
 
@@ -142,9 +136,13 @@
   <section id="runCard" class="hidden">
     <h2>즉시 실행</h2>
     <div class="row">
-      <button id="runNow">지금 수집·발송 실행</button>
+      <div>
+        <label for="runSchedule">일정 선택</label>
+        <select id="runSchedule"></select>
+      </div>
+      <button id="runNow">지금 수집·발송</button>
     </div>
-    <p class="hint">실행일 전날 기사를 수집해 등록된 수신자에게 발송합니다.</p>
+    <p class="hint">선택한 일정의 검색 범위로 수집해 등록된 수신자에게 바로 발송합니다. (저장하지 않은 변경은 반영되지 않습니다)</p>
   </section>
 </div>
 
@@ -155,20 +153,26 @@
 const OWNER = "krasotekin";
 const REPO = "newsletter-engine";
 const WORKFLOW_FILE = "newsletter.yml";
-const WORKFLOW_PATH = ".github/workflows/" + WORKFLOW_FILE;
 const RECIPIENTS_PATH = "config/recipients.json";
 const SCHEDULE_PATH = "config/schedule.json";
 const API = "https://api.github.com";
 const TOKEN_KEY = "khs_admin_token";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const RANGES = [
+  ["prev_day", "전날 전체 (00:00~23:59)"],
+  ["today_to_now", "당일 0시~발송 시각"],
+  ["last_7days", "최근 7일"]
+];
 
-let token = localStorage.getItem(TOKEN_KEY) || "";
+/* 토큰은 탭 수명 동안만 보관한다.
+   localStorage 는 같은 origin(krasotekin.github.io)의 다른 Pages 와 공유되므로 쓰지 않는다. */
+let token = sessionStorage.getItem(TOKEN_KEY) || "";
 let defaultBranch = "main";
 let recipients = [];
+let schedules = [];
 let recipientsSha = null;
 let scheduleSha = null;
-let schedule = { mode: "daily", weekday: 1, time_kst: "09:00" };
 
 /* ===== 공통 ===== */
 function toast(message, isError) {
@@ -219,42 +223,50 @@ async function getFile(path) {
 async function putFile(path, text, sha, message) {
   const data = await api(`/repos/${OWNER}/${REPO}/contents/${path}`, {
     method: "PUT",
-    body: JSON.stringify({
-      message,
-      content: encodeBase64(text),
-      sha,
-      branch: defaultBranch
-    })
+    body: JSON.stringify({ message, content: encodeBase64(text), sha, branch: defaultBranch })
   });
   return data.content.sha;
 }
 
-/* ===== KST → UTC cron ===== */
-function toCron(mode, weekday, timeKst) {
-  const [hourText, minuteText] = timeKst.split(":");
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  let utcHour = hour - 9;
-  let dayShift = 0;
-  if (utcHour < 0) { utcHour += 24; dayShift = -1; }
-  if (mode === "daily") return `${minute} ${utcHour} * * *`;
-  const utcWeekday = (weekday + dayShift + 7) % 7;
-  return `${minute} ${utcHour} * * ${utcWeekday}`;
+function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function scheduleLabel(mode, weekday, timeKst) {
-  const [hourText, minuteText] = timeKst.split(":");
-  const hour = Number(hourText);
-  const period = hour < 12 ? "오전" : "오후";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  const clock = `${period} ${hour12}:${minuteText}`;
-  return mode === "daily" ? `매일 ${clock}` : `매주 ${WEEKDAYS[weekday]}요일 ${clock}`;
+/* 일정 id: 서버(schedule.py)의 ^[a-z0-9][a-z0-9-]{0,31}$ 와 맞춘다 */
+function newId() {
+  return "s" + Date.now().toString(36) + Math.floor(Math.random() * 36).toString(36);
 }
 
-function applyCron(yamlText, cron, timeKst) {
-  const line = `    - cron: "${cron}" # KST ${timeKst}`;
-  if (!/^\s*-\s*cron:.*$/m.test(yamlText)) throw new Error("워크플로에서 cron 줄을 찾지 못했습니다.");
-  return yamlText.replace(/^\s*-\s*cron:.*$/m, line);
+function timeOptions() {
+  const out = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (const minute of ["00", "30"]) {
+      out.push(String(hour).padStart(2, "0") + ":" + minute);
+    }
+  }
+  return out;
+}
+const TIMES = timeOptions();
+
+function select(options, value, onChange) {
+  const el = document.createElement("select");
+  options.forEach(pair => {
+    const option = document.createElement("option");
+    option.value = pair[0];
+    option.textContent = pair[1];
+    el.appendChild(option);
+  });
+  el.value = value;
+  el.addEventListener("change", e => onChange(e.target.value));
+  return el;
+}
+
+function cell(tr, child, className) {
+  const td = document.createElement("td");
+  if (className) td.className = className;
+  if (child) td.appendChild(child);
+  tr.appendChild(td);
+  return td;
 }
 
 /* ===== 화면 ===== */
@@ -270,22 +282,18 @@ function renderRecipients() {
   recipients.forEach((person, index) => {
     const tr = document.createElement("tr");
 
-    const nameTd = document.createElement("td");
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.value = person.name || "";
     nameInput.addEventListener("input", e => { recipients[index].name = e.target.value; });
-    nameTd.appendChild(nameInput);
+    cell(tr, nameInput);
 
-    const emailTd = document.createElement("td");
     const emailInput = document.createElement("input");
     emailInput.type = "email";
     emailInput.value = person.email || "";
     emailInput.addEventListener("input", e => { recipients[index].email = e.target.value.trim(); });
-    emailTd.appendChild(emailInput);
+    cell(tr, emailInput);
 
-    const actionTd = document.createElement("td");
-    actionTd.className = "actions";
     const removeBtn = document.createElement("button");
     removeBtn.className = "link";
     removeBtn.textContent = "삭제";
@@ -293,43 +301,82 @@ function renderRecipients() {
       recipients.splice(index, 1);
       renderRecipients();
     });
-    actionTd.appendChild(removeBtn);
+    cell(tr, removeBtn, "actions");
 
-    tr.append(nameTd, emailTd, actionTd);
     tbody.appendChild(tr);
   });
   document.getElementById("recipientEmpty").classList.toggle("hidden", recipients.length > 0);
 }
 
-function renderSchedule() {
-  document.getElementById("currentSchedule").textContent =
-    "현재 설정 · " + scheduleLabel(schedule.mode, schedule.weekday, schedule.time_kst);
-  document.querySelectorAll("#modeSeg button").forEach(btn => {
-    btn.setAttribute("aria-pressed", String(btn.dataset.mode === schedule.mode));
+function renderSchedules() {
+  const tbody = document.getElementById("scheduleRows");
+  tbody.innerHTML = "";
+  schedules.forEach((sch, index) => {
+    const tr = document.createElement("tr");
+    if (!sch.enabled) tr.className = "off";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = sch.name || "";
+    nameInput.placeholder = "일정 이름";
+    nameInput.addEventListener("input", e => { schedules[index].name = e.target.value; });
+    cell(tr, nameInput);
+
+    cell(tr, select([["daily", "매일"], ["weekly", "매주"]], sch.mode, v => {
+      schedules[index].mode = v;
+      renderSchedules();
+    }));
+
+    const weekdaySelect = select(
+      WEEKDAYS.map((name, i) => [String(i), name + "요일"]),
+      String(sch.weekday),
+      v => { schedules[index].weekday = Number(v); }
+    );
+    weekdaySelect.disabled = sch.mode !== "weekly";
+    cell(tr, weekdaySelect);
+
+    cell(tr, select(TIMES.map(t => [t, t]), sch.time_kst, v => {
+      schedules[index].time_kst = v;
+    }));
+
+    cell(tr, select(RANGES, sch.range, v => { schedules[index].range = v; }));
+
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.checked = !!sch.enabled;
+    toggle.addEventListener("change", e => {
+      schedules[index].enabled = e.target.checked;
+      renderSchedules();
+    });
+    cell(tr, toggle, "on");
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "link";
+    removeBtn.textContent = "삭제";
+    removeBtn.addEventListener("click", () => {
+      schedules.splice(index, 1);
+      renderSchedules();
+    });
+    cell(tr, removeBtn, "actions");
+
+    tbody.appendChild(tr);
   });
-  document.getElementById("weekdayWrap").classList.toggle("hidden", schedule.mode !== "weekly");
-  document.getElementById("weekday").value = String(schedule.weekday);
-  document.getElementById("time").value = schedule.time_kst;
+  document.getElementById("scheduleEmpty").classList.toggle("hidden", schedules.length > 0);
+  renderRunOptions();
 }
 
-function buildSelects() {
-  const weekdaySelect = document.getElementById("weekday");
-  WEEKDAYS.forEach((name, index) => {
+function renderRunOptions() {
+  const el = document.getElementById("runSchedule");
+  const previous = el.value;
+  el.innerHTML = "";
+  schedules.filter(s => s.enabled).forEach(sch => {
     const option = document.createElement("option");
-    option.value = String(index);
-    option.textContent = name + "요일";
-    weekdaySelect.appendChild(option);
+    option.value = sch.id;
+    option.textContent = sch.name + " (" + sch.time_kst + ")";
+    el.appendChild(option);
   });
-  const timeSelect = document.getElementById("time");
-  for (let hour = 0; hour < 24; hour += 1) {
-    for (const minute of ["00", "30"]) {
-      const value = String(hour).padStart(2, "0") + ":" + minute;
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value + "  (" + scheduleLabel("daily", 0, value).replace("매일 ", "") + ")";
-      timeSelect.appendChild(option);
-    }
-  }
+  if (previous) el.value = previous;
+  document.getElementById("runNow").disabled = el.options.length === 0;
 }
 
 /* ===== 로드 ===== */
@@ -341,21 +388,33 @@ async function loadAll() {
 
     const recipientsFile = await getFile(RECIPIENTS_PATH);
     recipientsSha = recipientsFile.sha;
-    const parsed = JSON.parse(recipientsFile.text);
-    recipients = (parsed.recipients || []).map(r => ({ name: r.name || "", email: r.email || "" }));
+    const parsedRecipients = JSON.parse(recipientsFile.text);
+    recipients = (parsedRecipients.recipients || [])
+      .map(r => ({ name: r.name || "", email: r.email || "" }));
 
     const scheduleFile = await getFile(SCHEDULE_PATH);
     scheduleSha = scheduleFile.sha;
-    const savedSchedule = JSON.parse(scheduleFile.text);
-    schedule = {
-      mode: savedSchedule.mode === "weekly" ? "weekly" : "daily",
-      weekday: Number.isInteger(savedSchedule.weekday) ? savedSchedule.weekday : 1,
-      time_kst: savedSchedule.time_kst || "09:00"
-    };
+    const parsedSchedule = JSON.parse(scheduleFile.text);
+    let list = parsedSchedule.schedules;
+    if (!list) {
+      /* 구버전(단일 일정) 형식도 읽는다 */
+      list = parsedSchedule.time_kst
+        ? [Object.assign({}, parsedSchedule, { id: "default", name: parsedSchedule.label || "기본 일정" })]
+        : [];
+    }
+    schedules = list.map(s => ({
+      id: /^[a-z0-9][a-z0-9-]{0,31}$/.test(s.id || "") ? s.id : newId(),
+      name: s.name || "이름 없는 일정",
+      mode: s.mode === "weekly" ? "weekly" : "daily",
+      weekday: Number.isInteger(s.weekday) ? s.weekday : 1,
+      time_kst: TIMES.indexOf(s.time_kst) >= 0 ? s.time_kst : "09:00",
+      range: RANGES.some(pair => pair[0] === s.range) ? s.range : "prev_day",
+      enabled: s.enabled !== false
+    }));
 
     showData(true);
     renderRecipients();
-    renderSchedule();
+    renderSchedules();
   } catch (error) {
     showData(false);
     toast("불러오지 못했습니다: " + error.message, true);
@@ -366,13 +425,14 @@ async function loadAll() {
 document.getElementById("saveToken").addEventListener("click", () => {
   token = document.getElementById("token").value.trim();
   if (!token) { toast("토큰을 입력해 주십시오.", true); return; }
-  localStorage.setItem(TOKEN_KEY, token);
-  toast("토큰을 저장했습니다.");
+  sessionStorage.setItem(TOKEN_KEY, token);
+  toast("토큰을 저장했습니다. (탭을 닫으면 지워집니다)");
   loadAll();
 });
 
 document.getElementById("clearToken").addEventListener("click", () => {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY); /* 예전 버전이 남긴 토큰도 함께 지운다 */
   token = "";
   document.getElementById("token").value = "";
   showData(false);
@@ -383,7 +443,10 @@ document.getElementById("addRecipient").addEventListener("click", () => {
   const nameInput = document.getElementById("newName");
   const emailInput = document.getElementById("newEmail");
   const email = emailInput.value.trim();
-  if (!email.includes("@")) { toast("이메일 형식을 확인해 주십시오.", true); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    toast("이메일 형식을 확인해 주십시오.", true);
+    return;
+  }
   if (recipients.some(r => r.email.toLowerCase() === email.toLowerCase())) {
     toast("이미 등록된 이메일입니다.", true);
     return;
@@ -396,12 +459,12 @@ document.getElementById("addRecipient").addEventListener("click", () => {
 
 document.getElementById("saveRecipients").addEventListener("click", async (event) => {
   const button = event.currentTarget;
-  const invalid = recipients.find(r => !r.email.includes("@"));
-  if (invalid) { toast("이메일 형식을 확인해 주십시오.", true); return; }
+  const invalid = recipients.find(r => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email));
+  if (invalid) { toast("이메일 형식을 확인해 주십시오: " + invalid.email, true); return; }
   button.disabled = true;
   try {
     const payload = {
-      updated: new Date().toISOString().slice(0, 10),
+      updated: today(),
       recipients: recipients.map(r => ({ name: r.name, email: r.email }))
     };
     recipientsSha = await putFile(
@@ -418,41 +481,37 @@ document.getElementById("saveRecipients").addEventListener("click", async (event
   }
 });
 
-document.querySelectorAll("#modeSeg button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    schedule.mode = btn.dataset.mode;
-    renderSchedule();
+document.getElementById("addSchedule").addEventListener("click", () => {
+  schedules.push({
+    id: newId(),
+    name: "새 일정",
+    mode: "daily",
+    weekday: 1,
+    time_kst: "09:00",
+    range: "prev_day",
+    enabled: true
   });
+  renderSchedules();
 });
 
-document.getElementById("weekday").addEventListener("change", e => {
-  schedule.weekday = Number(e.target.value);
-});
-
-document.getElementById("time").addEventListener("change", e => {
-  schedule.time_kst = e.target.value;
-});
-
-document.getElementById("saveSchedule").addEventListener("click", async (event) => {
+document.getElementById("saveSchedules").addEventListener("click", async (event) => {
   const button = event.currentTarget;
+  const unnamed = schedules.find(s => !s.name.trim());
+  if (unnamed) { toast("일정 이름을 입력해 주십시오.", true); return; }
   button.disabled = true;
   try {
-    const cron = toCron(schedule.mode, schedule.weekday, schedule.time_kst);
-    const label = scheduleLabel(schedule.mode, schedule.weekday, schedule.time_kst);
-
-    const workflow = await getFile(WORKFLOW_PATH);
-    const updatedYaml = applyCron(workflow.text, cron, schedule.time_kst);
-    if (updatedYaml !== workflow.text) {
-      await putFile(WORKFLOW_PATH, updatedYaml, workflow.sha, "chore: 발송 일정 변경 (" + label + ")");
-    }
-
     const payload = {
-      mode: schedule.mode,
-      weekday: schedule.weekday,
-      time_kst: schedule.time_kst,
-      cron_utc: cron,
-      label,
-      updated: new Date().toISOString().slice(0, 10)
+      version: 2,
+      updated: today(),
+      schedules: schedules.map(s => ({
+        id: s.id,
+        name: s.name.trim(),
+        mode: s.mode,
+        weekday: s.weekday,
+        time_kst: s.time_kst,
+        range: s.range,
+        enabled: !!s.enabled
+      }))
     };
     scheduleSha = await putFile(
       SCHEDULE_PATH,
@@ -460,9 +519,8 @@ document.getElementById("saveSchedule").addEventListener("click", async (event) 
       scheduleSha,
       "chore: 발송 일정 갱신 (관리 화면)"
     );
-
-    renderSchedule();
-    toast(label + " 로 저장했습니다. (UTC cron: " + cron + ")");
+    toast("일정 " + schedules.length + "건을 저장했습니다.");
+    renderRunOptions();
   } catch (error) {
     toast("저장 실패: " + error.message, true);
   } finally {
@@ -472,11 +530,13 @@ document.getElementById("saveSchedule").addEventListener("click", async (event) 
 
 document.getElementById("runNow").addEventListener("click", async (event) => {
   const button = event.currentTarget;
+  const scheduleId = document.getElementById("runSchedule").value;
+  if (!scheduleId) { toast("실행할 일정을 선택해 주십시오.", true); return; }
   button.disabled = true;
   try {
     await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
       method: "POST",
-      body: JSON.stringify({ ref: defaultBranch, inputs: {} })
+      body: JSON.stringify({ ref: defaultBranch, inputs: { schedule: scheduleId } })
     });
     toast("실행을 요청했습니다. Actions 탭에서 진행 상황을 확인할 수 있습니다.");
   } catch (error) {
@@ -487,7 +547,6 @@ document.getElementById("runNow").addEventListener("click", async (event) => {
 });
 
 /* ===== 시작 ===== */
-buildSelects();
 if (token) document.getElementById("token").value = token;
 loadAll();
 </script>
