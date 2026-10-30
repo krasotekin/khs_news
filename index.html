@@ -179,6 +179,7 @@ const TOKEN_KEY = "khs_admin_token";
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const RANGES = [
   ["prev_day", "전날 전체 (00:00~23:59)"],
+  ["prev_workdays", "지난 영업일 전체 (월요일은 금·토·일)"],
   ["today_to_now", "당일 0시~발송 시각"],
   ["last_7days", "최근 7일"]
 ];
@@ -405,7 +406,7 @@ function renderSchedules() {
     nameInput.addEventListener("input", e => { schedules[index].name = e.target.value; });
     cell(tr, nameInput);
 
-    cell(tr, select([["daily", "매일"], ["weekly", "매주"]], sch.mode, v => {
+    cell(tr, select([["daily", "평일 매일"], ["weekly", "매주"]], sch.mode, v => {
       schedules[index].mode = v;
       renderSchedules();
     }));
